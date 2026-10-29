@@ -1,0 +1,20 @@
+# Lint and format settings: `ruff check .` and `ruff format --check .` from the repo
+# root.
+line-length = 120
+target-version = "py311"
+extend-exclude = ["runs"]
+
+[lint]
+# Ruff's default rule set plus import order (I), likely bugs (B), outdated syntax (UP)
+# and docstring and comment lines over max-doc-length (W505).
+extend-select = ["I", "B", "UP", "W505"]
+
+[lint.isort]
+known-first-party = ["http_record_replay"]
+
+[lint.pycodestyle]
+# Prose (docstrings and comments) wraps at 88 columns; code lines may be longer.
+max-doc-length = 88
+
+[format]
+exclude = ["*.md"]

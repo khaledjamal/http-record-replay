@@ -1,0 +1,29 @@
+# Package metadata and build settings. No runtime dependencies: the package hooks
+# whichever HTTP libraries are installed. The test extra installs the ones the tests use.
+[project]
+name = "http-record-replay"
+version = "0.1.0.dev0"
+description = "Record and replay the HTTP calls of whole Python program runs, with a built-in HTTP log"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Khaled Jamal" }]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "requests",
+    "urllib3",
+    "httpx",
+    "aiohttp",
+    "azure-identity",
+    "botocore",
+]
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
