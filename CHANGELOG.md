@@ -11,6 +11,8 @@ Added:
   interpreter that isn't there with the one running them, and a recorded working folder that isn't there with the
   same folder relative to the recording's project root (the new `project cwd:` line in `recording-info.txt`). Each
   change is one `[http_replay]` note line.
+- `examples/github_repo.py` and its committed recording (GitHub's public API, no key); CI replays it with
+  `compare --strict`.
 
 Changed:
 - `recording-info.txt` writes paths under the home folder as `~/...` (the command, the working folder, the replay

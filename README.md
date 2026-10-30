@@ -177,6 +177,18 @@ with 1 when a replay fails, so it can run in CI.
 PASS  exit 0 (recorded 0)  MISS 0  telemetry MISS 0  changed lines 0  greet-20261029-220624
 ```
 
+## Example
+
+[examples/github_repo.py](examples/github_repo.py) shows a repository and its latest release from GitHub's public
+REST API (no key needed). Its record run is committed in
+[examples/recordings/github_repo/](examples/recordings/github_repo/): the two calls as JSON files, the
+`recording-info.txt` and the run's `output.txt` with the HTTP log. CI replays it on every push, with the network
+blocked:
+
+```bash
+python -m http_record_replay compare examples/recordings/github_repo --strict
+```
+
 ## How it works
 
 ```text
@@ -229,7 +241,8 @@ http-record-replay to record and replay whole runs of Python scripts and SDK app
 - With aiohttp, a body is captured when it is read with `read()`.
 - `output.txt` copies what the program writes through `sys.stdout` and `sys.stderr` (prints, logging, tracebacks),
   not the output of child processes or of C code writing to the file descriptors directly.
-- Recordings keep real hosts and IDs: keep them private (`runs/` is git-ignored here).
+- Recordings keep real hosts and IDs: keep them private (`runs/` is git-ignored here). The example's recording is
+  public because it holds only a public API called without a key.
 
 ## Development
 

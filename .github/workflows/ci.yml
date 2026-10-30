@@ -1,5 +1,5 @@
-# Lint and unit tests (against a local server, no network) on every push and pull
-# request.
+# Lint, unit tests (against a local server, no network) and a replay of the example's
+# recording on every push and pull request.
 name: ci
 
 on:
@@ -34,3 +34,6 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[test]" httpx2
       - run: python -m unittest discover -s tests -v
+      # A real recorded run (GitHub's public API, no key), replayed with the network
+      # blocked.
+      - run: python -m http_record_replay compare examples/recordings/github_repo --strict
