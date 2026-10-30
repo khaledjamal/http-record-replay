@@ -3,7 +3,7 @@
 # replay; the test extra installs what the tests use.
 [project]
 name = "http-record-replay"
-version = "0.2.0.dev0"
+version = "0.2.0"
 description = "Record and replay the HTTP calls of whole Python program runs, with a built-in HTTP log"
 readme = "README.md"
 license = "MIT"

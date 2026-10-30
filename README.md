@@ -6,7 +6,7 @@ Run a program once with recording on, and every web service call it makes is sav
 with replay on, and the same program gets the saved answers: no network, no sign-in, no cost. It is made for scripts
 and SDK-based apps (AI agents, cloud SDKs) that run as normal commands, not only for unit tests.
 
-Status: early development (0.2.0.dev0), not on PyPI yet.
+Status: early development (0.2.0), not on PyPI yet.
 
 ## Why
 
