@@ -6,7 +6,7 @@ Run a program once with recording on, and every web service call it makes is sav
 with replay on, and the same program gets the saved answers: no network, no sign-in, no cost. It is made for scripts
 and SDK-based apps (AI agents, cloud SDKs) that run as normal commands, not only for unit tests.
 
-Status: early development (0.1.0.dev0), not on PyPI yet.
+Status: early development (0.2.0.dev0), not on PyPI yet.
 
 ## Why
 
@@ -28,7 +28,7 @@ evaluation); all 27 replay with this package too (checked 2026-10-29).
 
 ```bash
 git clone https://github.com/khaledjamal/http-record-replay.git && cd http-record-replay
-uv venv && uv pip install -e .
+uv venv && uv pip install -e ".[clock]"   # [clock]: the recorded clock on replay (time-machine)
 ```
 
 Once at the start of the program:
@@ -71,6 +71,13 @@ environment (pip, other tools).
     multipart upload is matched without its random boundary; any UUID can match any UUID
     (`HTTP_REPLAY_IGNORE_UUIDS`).
   - A request made several times (a job polled until it ends) gets its recorded answers in order.
+  - The clock is the record run's: replay starts the wall clock (`time.time`, `datetime.now`, ...) at the time the
+    record run started, so dates the program puts in requests match (needs the `clock` extra).
+- **Fast replays.** Sleeps of the main thread (`time.sleep`, `asyncio.sleep`, anyio) return at once, and the clocks
+  move on by the time skipped, so poll loops and deadlines behave as before. Other threads, and asyncio timeouts,
+  keep the real time. When 20 sleeps in a row get no replayed answer, the program is waiting for something real (a
+  local server, a child process): sleeps become real again until the next answer, and one line names the caller.
+  The workshop's 27 recorded lab runs replay in 70 s instead of 150 s.
 - **Secrets redacted by default**, in the log and the recordings: authorization and API key headers of the common
   providers, cookies, key and signature parameters (AWS presigned URLs, the Azure Functions `?code=` key), token,
   password and credential fields in JSON. A redacted object keeps its shape, so code that reads `credentials.key`
@@ -82,8 +89,8 @@ environment (pip, other tools).
   format.
 - **Recordings that describe themselves**: one JSON file per call (request and whole response); a
   `recording-info.txt` with the date, command, working folder, the command and settings that replay it, git commit,
-  Python and package versions, the random seed and (with the runner) the exit code; and `output.txt`, the run's
-  console output.
+  Python and package versions, the random seed, the start time and (with the runner) the exit code; and
+  `output.txt`, the run's console output.
 - **A regression suite for free**: `compare` and `replay-all` replay recordings against the current code and
   compare the output with the record runs' (see below).
 
@@ -132,6 +139,8 @@ calls (replayed ones carry an `x-http-replay` header). It works on its own, with
 | `HTTP_REPLAY_DIR` | the recording's folder; `record` without it saves to `runs/recordings/<script>-<timestamp>/` |
 | `HTTP_REPLAY_IGNORE_FIELDS` | JSON body fields left out when requests are matched (comma-separated) |
 | `HTTP_REPLAY_IGNORE_UUIDS` | `1`: any UUID in a request matches any UUID |
+| `HTTP_REPLAY_SKIP_SLEEP` | replay: `1` (default): sleeps return at once; `0`: real sleeps |
+| `HTTP_REPLAY_CLOCK` | replay: `1` (default): the clock starts at the record run's start (needs time-machine); `0`: the real clock |
 | `HTTP_REDACT_HEADERS`, `HTTP_REDACT_PARAMS`, `HTTP_REDACT_FIELDS` | more names to redact (comma-separated) |
 
 A value in the environment wins over the `.env` file (the nearest folder upwards with `.git` or `pyproject.toml`).
@@ -142,6 +151,7 @@ A value in the environment wins over the `.env` file (the nearest folder upwards
 python -m http_record_replay compare runs/recordings/<folder>   # one recording
 python -m http_record_replay replay-all                        # the newest recording of each command
 python -m http_record_replay replay-all --all --strict         # every recording; changed output fails too
+python -m http_record_replay compare runs/recordings/<folder> --real-sleep  # with real sleeps
 ```
 
 Each recording is replayed with the command, working folder and settings it was recorded with. A replay:
@@ -188,6 +198,7 @@ configuration.
 | Secrets redacted by default | yes | no (`filter_headers=()`; configurable) | as vcrpy | n/a | not checked |
 | Body matched by default | yes, JSON by value | no (`match_on` has no `body`; a `body` matcher parses JSON) | as vcrpy | per mock | per stub |
 | Random values repeat on replay | yes (recorded seed for `random`, `uuid4`) | no | no | n/a (mocks) | n/a |
+| Sleeps skipped and the record run's clock on replay | yes | no | no | n/a (mocks) | n/a |
 | Network blocked on replay | yes, sockets | no (`ignore_hosts` pass through) | yes, `--block-network` | responses: unmatched requests raise | n/a |
 | Request and response log | yes | no | no | no | not checked |
 | Cloud sign-in stand-in | Azure | code | code | n/a | n/a |
@@ -203,8 +214,12 @@ http-record-replay to record and replay whole runs of Python scripts and SDK app
 
 - A replay shows that the code still handles the recorded answers, not that the service still answers the same way.
   A new prompt, model or SDK version needs a new recording.
-- Random values the seed doesn't reach (`os.urandom`, `secrets`, numpy, the order of concurrent tasks) and
-  timestamps in request bodies need `HTTP_REPLAY_IGNORE_FIELDS` or a fixed value from the program.
+- Random values the seed doesn't reach (`os.urandom`, `secrets`, numpy, the order of concurrent tasks) need
+  `HTTP_REPLAY_IGNORE_FIELDS` or a fixed value from the program; so do timestamps in request bodies without the
+  `clock` extra, or in recordings made before version 0.2 (they have no clock start).
+- Time: a sleep imported by name before `enable()` (`from time import sleep`) isn't skipped; waits that don't sleep
+  (`Event.wait`, `queue.get` with a timeout) take real time; the recorded clock doesn't reach child processes, and
+  local times use the replay machine's time zone.
 - Only HTTP: not gRPC, AMQP or WebSocket.
 - With aiohttp, a body is captured when it is read with `read()`.
 - `output.txt` copies what the program writes through `sys.stdout` and `sys.stderr` (prints, logging, tracebacks),

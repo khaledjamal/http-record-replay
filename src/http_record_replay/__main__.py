@@ -3,8 +3,9 @@
     python -m http_record_replay run script.py [args ...]
     python -m http_record_replay run -m package.module [args ...]
     python -m http_record_replay compare RECORDING [--strict] [--ignore REGEX ...]
+                                         [--real-sleep]
     python -m http_record_replay replay-all [--recordings DIR] [--all] [--strict]
-                                            [--ignore REGEX ...]
+                                            [--ignore REGEX ...] [--real-sleep]
 
 - run: calls `http_record_replay.enable()` (settings as usual: HTTP_LOG, HTTP_REPLAY,
   ...), then runs the program as `python script.py` or `python -m module` would: as
@@ -16,7 +17,8 @@
 - replay-all: does that for every recording in DIR (default runs/recordings at the
   project root): the newest per command, or each one with --all. One line per
   recording, and the summary saved in runs/replays/<timestamp>-replay-all/.
-compare and replay-all exit with 1 when a replay fails.
+compare and replay-all exit with 1 when a replay fails; --real-sleep makes their replays
+sleep for real (HTTP_REPLAY_SKIP_SLEEP=0).
 """
 
 import argparse
@@ -46,16 +48,18 @@ def main(argv=None):
     for judged in (compare_parser, all_parser):
         judged.add_argument("--strict", action="store_true", help="changed output lines fail the replay too")
         judged.add_argument("--ignore", action="append", default=[], metavar="REGEX", help="more changing values")
+        judged.add_argument("--real-sleep", action="store_true", help="sleep for real (HTTP_REPLAY_SKIP_SLEEP=0)")
     args = parser.parse_args(argv)
     if args.command == "run":
         if args.module is None and not args.target:
             parser.error("run needs a script (or -m module)")
         run(args.module, args.target)
-    elif args.command == "compare":
-        sys.exit(compare(args.recording, args.strict, args.ignore))
-    else:
-        recordings = args.recordings or settings.project_root() / "runs" / "recordings"
-        sys.exit(replay_all(recordings, args.all, args.strict, args.ignore))
+        return
+    extra_env = {"HTTP_REPLAY_SKIP_SLEEP": "0"} if args.real_sleep else {}
+    if args.command == "compare":
+        sys.exit(compare(args.recording, args.strict, args.ignore, extra_env))
+    recordings = args.recordings or settings.project_root() / "runs" / "recordings"
+    sys.exit(replay_all(recordings, args.all, args.strict, args.ignore, extra_env))
 
 
 # --------------------------------------------------------------------------------------
@@ -102,9 +106,9 @@ def run_module(module, module_args):
 # compare and replay-all
 
 
-def compare(recording, strict, ignore):
+def compare(recording, strict, ignore, extra_env):
     replay_dir = workflow.runs_folder(f"compare-{Path(recording).name}")
-    result = workflow.replay(recording, replay_dir / record.OUTPUT_FILE, ignore=ignore)
+    result = workflow.replay(recording, replay_dir / record.OUTPUT_FILE, extra_env, ignore)
     print(f"$ {workflow.shown_command(result)}")
     print(f"replay output: {result.output}")
     for miss in result.own_misses:
@@ -117,7 +121,7 @@ def compare(recording, strict, ignore):
     return 0 if result.passed(strict) else 1
 
 
-def replay_all(recordings_folder, every, strict, ignore):
+def replay_all(recordings_folder, every, strict, ignore, extra_env):
     found = workflow.find_recordings(recordings_folder)
     chosen = found if every else workflow.newest_per_command(found)
     skipped = [path for path in found if path not in chosen]
@@ -127,7 +131,7 @@ def replay_all(recordings_folder, every, strict, ignore):
     failures = 0
     for recording in chosen:
         try:
-            result = workflow.replay(recording, replay_dir / f"{recording.name}.txt", ignore=ignore)
+            result = workflow.replay(recording, replay_dir / f"{recording.name}.txt", extra_env, ignore)
         except ValueError as error:
             line = f"SKIP  {error}"
         else:

@@ -64,9 +64,11 @@ def setting(name, default=None):
     return read_env_file(env_file()).get(name, default)
 
 
-def flag(name):
-    """True when the setting is 1, true, yes or on (any case)."""
-    return (setting(name) or "").strip().lower() in TRUE_VALUES
+def flag(name, default=False):
+    """True when the setting is 1, true, yes or on (any case); default when it isn't
+    set."""
+    value = (setting(name) or "").strip().lower()
+    return value in TRUE_VALUES if value else default
 
 
 def names(name):

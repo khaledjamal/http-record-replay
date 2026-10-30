@@ -8,8 +8,9 @@ Real hosts and IDs stay as they are: recordings are private files.
 
 Next to the calls, so a recording describes itself (workflow.py replays it from these):
 - recording-info.txt: date, command, working folder, the command that replays it, git
-  commit, Python and package versions, the random seed (see _seed.py), and the exit
-  code when the runner started the program.
+  commit, Python and package versions, the random seed (see _seed.py), the start time
+  (the recorded clock, see _clock.py), and the exit code when the runner started the
+  program.
 - output.txt: the run's console output, copied from sys.stdout and sys.stderr while
   recording (prints, logging, tracebacks; not the output of child processes or of C
   code writing to the file descriptors directly).
@@ -28,7 +29,7 @@ from datetime import datetime
 from importlib import metadata
 from urllib.parse import urlsplit
 
-from . import _hooks, _seed, redact, settings
+from . import _clock, _hooks, _seed, redact, settings
 
 # Response headers that describe the bytes on the wire; recordings keep the decompressed
 # body, so they are dropped.
@@ -47,6 +48,8 @@ REPLAYED_SETTINGS = (
     "HTTP_LOG_POLLS",
     "HTTP_REPLAY_IGNORE_FIELDS",
     "HTTP_REPLAY_IGNORE_UUIDS",
+    "HTTP_REPLAY_SKIP_SLEEP",
+    "HTTP_REPLAY_CLOCK",
     "HTTP_REDACT_HEADERS",
     "HTTP_REDACT_PARAMS",
     "HTTP_REDACT_FIELDS",
@@ -132,6 +135,7 @@ def write_recording_info(directory, random_seed):
         f"git commit: {commit}",
         f"python: {platform.python_version()}",
         f"{_seed.SEED_LABEL} {random_seed}",
+        f"{_clock.CLOCK_LABEL}: {_clock.record_start()}",
         "packages:",
         *(f"  {package}" for package in packages),
     ]

@@ -11,9 +11,13 @@ Settings (the environment or the project's .env; the arguments of `install()` wi
     HTTP_REPLAY_IGNORE_UUIDS   1 = UUIDs anywhere in a request (path, query, body) match
                                any UUID; default off. For recordings made before the
                                random seed, whose random IDs can't be made again.
+    HTTP_REPLAY_SKIP_SLEEP     replay: sleeps of the main thread return at once and
+                               the clocks move on; default on, 0 = real sleeps
+    HTTP_REPLAY_CLOCK          replay: the wall clock starts at the record run's start;
+                               default on (needs time-machine), 0 = the real clock
 
-record: every call is made for real and saved (record.py), and the random seed is noted
-(_seed.py).
+record: every call is made for real and saved (record.py); the random seed (_seed.py)
+and the start time (_clock.py) are noted.
 
 replay: nothing leaves the machine.
 - Matching: each request is matched to a recorded one by method, URL (host, path and
@@ -29,6 +33,7 @@ replay: nothing leaves the machine.
   code starts (a CLI) isn't stopped by it.
 - Providers: the add-ons in providers/ give a sign-in stand-in and fake secrets the SDK
   can parse (Azure).
+- Time: sleeps are skipped and the clock is the record run's (_clock.py).
 - Replayed responses carry the header `x-http-replay: <file name>`.
 
 Covered: requests, urllib3, httpx2 and httpx, and aiohttp (bodies read with `read()`).
@@ -49,7 +54,7 @@ import threading
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-from . import _hooks, _seed, providers, record, redact, settings
+from . import _clock, _hooks, _seed, providers, record, redact, settings
 from ._patches import Patches
 
 MODES = ("off", "record", "replay")
@@ -141,6 +146,8 @@ def _start_replay():
         print("[http_replay] no random seed in this recording: random values differ from the record run")
     else:
         _seed.apply(random_seed, _patches)
+    recorded_start = record.read_info(_state["dir"]).get(_clock.CLOCK_LABEL)
+    _clock.start_replay(recorded_start, _patches)
     _guard_network()
     for provider in providers.active():
         provider.install_replay(_patches)
@@ -152,6 +159,7 @@ def uninstall():
     if _state["recorder"] is not None:
         _hooks.remove_observer(_state["recorder"])
     _hooks.set_responder(None)
+    _clock.stop()
     _patches.restore()
     if _state["output_file"] is not None:
         _state["output_file"].close()
@@ -252,6 +260,7 @@ def _respond(exchange):
             raise HttpReplayMiss(message)
         _used[digest] = count + 1
         path = files[count]
+    _clock.note_answer()
     response = json.loads(path.read_text())["response"]
     if "body_json" in response:
         for provider in providers.active():
