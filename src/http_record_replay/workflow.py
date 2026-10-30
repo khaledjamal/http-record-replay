@@ -7,6 +7,11 @@ replays it, the working folder, the HTTP_* settings it was made with (the replay
 them too, so the log looks the same) and, when the runner made it, the exit code;
 output.txt holds the record run's console output.
 
+A recording made on another machine or in another clone replays too: a recorded
+interpreter that isn't there is replaced by the one running the replay, and a recorded
+working folder that isn't there by the same folder relative to the recording's project
+root. Each change is one `[http_replay]` note line (Result.notes).
+
 How a replay is judged:
 1. It fails when the program makes a call the recording doesn't have (a MISS), except
    telemetry the SDKs send on their own (the providers' TELEMETRY_HOSTS: counted
@@ -25,7 +30,9 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -50,6 +57,7 @@ class Result:
     exit_code: int
     recorded_exit_code: int | None
     output: Path
+    notes: list = field(default_factory=list)  # what replay had to change: another interpreter, folder
     own_misses: list = field(default_factory=list)
     telemetry_misses: int = 0
     diff: list | None = None  # None: the record run's output isn't in the recording
@@ -70,18 +78,21 @@ def replay(recording, output, extra_env=None, ignore=()):
     info = record.read_info(recording)
     if record.REPLAY_COMMAND_KEY not in info:
         raise ValueError(f"{recording}: no replay command in {record.INFO_FILE} (made before version 0.1)")
-    command = json.loads(info[record.REPLAY_COMMAND_KEY])
+    command, command_notes = replay_command(info)
+    cwd, cwd_notes = replay_cwd(recording, info)
+    notes = command_notes + cwd_notes
     recorded_settings = json.loads(info.get(record.SETTINGS_KEY, "{}"))
-    cwd = info.get("cwd") if Path(info.get("cwd", "")).is_dir() else None
     env = {**os.environ, **recorded_settings, **(extra_env or {})}
     env.update(HTTP_REPLAY="replay", HTTP_REPLAY_DIR=str(recording))
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as out:
+        out.writelines(f"[http_replay] {note}\n" for note in notes)
+        out.flush()
         exit_code = subprocess.run(
             command, check=False, cwd=cwd, env=env, stdout=out, stderr=subprocess.STDOUT
         ).returncode
     recorded_exit = info.get(record.EXIT_CODE_KEY)
-    result = Result(recording, command, exit_code, int(recorded_exit) if recorded_exit else None, output)
+    result = Result(recording, command, exit_code, int(recorded_exit) if recorded_exit else None, output, notes)
     replay_text = output.read_text(encoding="utf-8", errors="replace")
     telemetry = providers.telemetry_hosts()
     for match in MISS_LINE.finditer(replay_text):
@@ -95,6 +106,31 @@ def replay(recording, output, extra_env=None, ignore=()):
         after = comparable_lines(replay_text, ignore)
         result.diff = list(difflib.unified_diff(before, after, "record run", "replay", lineterm="", n=0))
     return result
+
+
+def replay_command(info):
+    """The recorded replay command with ~ expanded, and notes. A recorded interpreter
+    that isn't on this machine (a recording made elsewhere) is replaced by the one
+    running this replay."""
+    command = [record.expand_home(part) for part in json.loads(info[record.REPLAY_COMMAND_KEY])]
+    if shutil.which(command[0]) is not None:
+        return command, []
+    note = f"recorded interpreter {command[0]} not found, using {sys.executable}"
+    return [sys.executable, *command[1:]], [note]
+
+
+def replay_cwd(recording, info):
+    """The folder to replay in, and notes: the recorded one when it is there, else the
+    same folder relative to the project root the recording is in (another clone or
+    machine), else the current folder (None)."""
+    recorded = record.expand_home(info.get("cwd", ""))
+    if recorded and Path(recorded).is_dir():
+        return recorded, []
+    relative = info.get(record.PROJECT_CWD_KEY)
+    folder = settings.project_root(recording) / relative if relative is not None else None
+    if folder is None or not folder.is_dir():
+        return None, [f"recorded folder {recorded or '(none)'} not found, using the current folder"]
+    return str(folder), [f"recorded folder {recorded} not found, using {folder}"]
 
 
 def comparable_lines(text, ignore=()):

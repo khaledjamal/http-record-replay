@@ -109,6 +109,8 @@ def run_module(module, module_args):
 def compare(recording, strict, ignore, extra_env):
     replay_dir = workflow.runs_folder(f"compare-{Path(recording).name}")
     result = workflow.replay(recording, replay_dir / record.OUTPUT_FILE, extra_env, ignore)
+    for note in result.notes:
+        print(f"[http_replay] {note}")
     print(f"$ {workflow.shown_command(result)}")
     print(f"replay output: {result.output}")
     for miss in result.own_misses:
@@ -135,6 +137,8 @@ def replay_all(recordings_folder, every, strict, ignore, extra_env):
         except ValueError as error:
             line = f"SKIP  {error}"
         else:
+            for note in result.notes:
+                print(f"[http_replay] {note}")
             line = workflow.describe(result, strict)
             failures += not result.passed(strict)
         print(line, flush=True)

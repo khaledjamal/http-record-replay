@@ -2,7 +2,19 @@
 
 Each version lists the settings and options it added and the behavior it changed, so a project pinned to an older
 version can tell what it has. Install a version by its tag:
-`pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.2.0"`.
+`pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.3.0"`.
+
+## 0.3.0 (2026-10-30)
+
+Added:
+- Recordings replay on another machine or in another clone: `compare` and `replay-all` replace a recorded
+  interpreter that isn't there with the one running them, and a recorded working folder that isn't there with the
+  same folder relative to the recording's project root (the new `project cwd:` line in `recording-info.txt`). Each
+  change is one `[http_replay]` note line.
+
+Changed:
+- `recording-info.txt` writes paths under the home folder as `~/...` (the command, the working folder, the replay
+  command), so a recording shows no user name. Replay expands them again; recordings made with 0.2 still replay.
 
 ## 0.2.0 (2026-10-30, tag v0.2.0)
 

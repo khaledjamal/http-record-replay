@@ -155,6 +155,47 @@ class WorkflowTest(unittest.TestCase):
         summaries = list((self.folder / "runs" / "replays").glob("*-replay-all*/summary.txt"))
         self.assertEqual(len(summaries), 2)
 
+    def test_paths_under_the_home_folder_start_with_a_tilde(self):
+        home = os.path.realpath(self.folder.parent)
+        recording = self.recordings / "first"
+        finished = self.python(
+            "-m",
+            "http_record_replay",
+            "run",
+            str(self.script),
+            self.base,
+            HOME=home,
+            HTTP_REPLAY="record",
+            HTTP_REPLAY_DIR=str(recording),
+        )
+        self.assertEqual(finished.returncode, 0, finished.stderr)
+        info = record.read_info(recording)
+        self.assertEqual(info["cwd"], f"~/{self.folder.name}")
+        self.assertEqual(info[record.PROJECT_CWD_KEY], ".")
+        self.assertIn(f"~/{self.folder.name}/greet.py", json.loads(info[record.REPLAY_COMMAND_KEY]))
+        self.assertNotIn(home, (recording / record.INFO_FILE).read_text())
+        replayed = self.python("-m", "http_record_replay", "compare", str(recording), "--strict", HOME=home)
+        self.assertEqual(replayed.returncode, 0, replayed.stdout + replayed.stderr)
+        self.assertNotIn("not found", replayed.stdout)
+
+    def test_a_recording_made_on_another_machine_replays(self):
+        recording = self.record_with_runner("first")
+        info_file = recording / record.INFO_FILE
+        lines = info_file.read_text().splitlines()
+        for number, line in enumerate(lines):
+            if line.startswith("cwd: "):
+                lines[number] = "cwd: /no/such/folder"
+            if line.startswith(f"{record.REPLAY_COMMAND_KEY}: "):
+                command = json.loads(line.partition(": ")[2])
+                lines[number] = f"{record.REPLAY_COMMAND_KEY}: {json.dumps(['/no/such/python', *command[1:]])}"
+        info_file.write_text("\n".join(lines) + "\n")
+        finished = self.python("-m", "http_record_replay", "compare", str(recording), "--strict")
+        self.assertEqual(finished.returncode, 0, finished.stdout + finished.stderr)
+        self.assertIn("[http_replay] recorded interpreter /no/such/python not found, using ", finished.stdout)
+        folder = os.path.realpath(self.folder)
+        self.assertIn(f"[http_replay] recorded folder /no/such/folder not found, using {folder}", finished.stdout)
+        self.assertIn("PASS  exit 0 (recorded 0)  MISS 0", finished.stdout)
+
     def test_changing_values_are_replaced_before_comparing(self):
         lines = workflow.comparable_lines(
             "took 0.53 s\nat 2026-10-29T21:14:43+04:00\nid 0ac57b06-6e86-4d53-9500-cf6e7d403006\n"

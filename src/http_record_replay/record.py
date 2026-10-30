@@ -7,10 +7,11 @@ text). Secrets are redacted (see redact.py), keeping the shape of a redacted obj
 Real hosts and IDs stay as they are: recordings are private files.
 
 Next to the calls, so a recording describes itself (workflow.py replays it from these):
-- recording-info.txt: date, command, working folder, the command that replays it, git
-  commit, Python and package versions, the random seed (see _seed.py), the start time
-  (the recorded clock, see _clock.py), and the exit code when the runner started the
-  program.
+- recording-info.txt: date, command, working folder (also relative to the project
+  root), the command that replays it, git commit, Python and package versions, the
+  random seed (see _seed.py), the start time (the recorded clock, see _clock.py), and
+  the exit code when the runner started the program. Paths under the home folder start
+  with ~, so a recording shows no user name.
 - output.txt: the run's console output, copied from sys.stdout and sys.stderr while
   recording (prints, logging, tracebacks; not the output of child processes or of C
   code writing to the file descriptors directly).
@@ -27,6 +28,7 @@ import sys
 import threading
 from datetime import datetime
 from importlib import metadata
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import _clock, _hooks, _seed, redact, settings
@@ -37,6 +39,7 @@ WIRE_HEADERS = {"content-length", "content-encoding", "transfer-encoding"}
 INFO_FILE = "recording-info.txt"
 OUTPUT_FILE = "output.txt"
 REPLAY_COMMAND_KEY = "replay command"  # a JSON list in recording-info.txt
+PROJECT_CWD_KEY = "project cwd"  # the working folder relative to the project root
 SETTINGS_KEY = "settings"  # a JSON object: the HTTP_* settings a replay should reuse
 EXIT_CODE_KEY = "exit code"
 # Settings that change the output or the matching, kept so a replay uses the same ones
@@ -120,17 +123,48 @@ def replay_command():
     return [sys.executable, *sys.argv]
 
 
+def home_short(path):
+    """path with the home folder written as ~, so a recording doesn't show the user
+    name; expand_home() undoes it."""
+    home = os.path.expanduser("~").rstrip(os.sep)
+    if home and home != "~" and (path == home or path.startswith(home + os.sep)):
+        return "~" + path[len(home) :]
+    return path
+
+
+def expand_home(path):
+    """path with a leading ~ (as home_short() writes it) turned back into the home
+    folder."""
+    if path == "~" or path.startswith("~" + os.sep):
+        return os.path.expanduser(path)
+    return path
+
+
+def project_cwd():
+    """The working folder relative to the project root, in / form ("." at the root), so
+    a replay can find it in another clone; None outside the project root."""
+    try:
+        return Path.cwd().relative_to(settings.project_root().resolve()).as_posix()
+    except ValueError:
+        return None
+
+
 def write_recording_info(directory, random_seed):
     """recording-info.txt: when and how the recording was made, so a later replay can be
-    run and judged against it, and the random seed that replay reuses."""
+    run and judged against it, and the random seed that replay reuses. Paths under the
+    home folder start with ~ (home_short())."""
     packages = sorted(f"{dist.metadata['Name']}=={dist.version}" for dist in metadata.distributions())
     commit = _git_commit()
     used_settings = {name: value for name in REPLAYED_SETTINGS if (value := settings.setting(name)) is not None}
+    command_line = shlex.join(home_short(part) for part in sys.argv)
+    command = [home_short(part) for part in replay_command()]
+    relative_cwd = project_cwd()
     lines = [
         f"date: {datetime.now().astimezone().isoformat(timespec='seconds')}",
-        f"command: {shlex.join(sys.argv)}",
-        f"cwd: {os.getcwd()}",
-        f"{REPLAY_COMMAND_KEY}: {json.dumps(replay_command())}",
+        f"command: {command_line}",
+        f"cwd: {home_short(os.getcwd())}",
+        *([f"{PROJECT_CWD_KEY}: {relative_cwd}"] if relative_cwd is not None else []),
+        f"{REPLAY_COMMAND_KEY}: {json.dumps(command)}",
         f"{SETTINGS_KEY}: {json.dumps(used_settings)}",
         f"git commit: {commit}",
         f"python: {platform.python_version()}",

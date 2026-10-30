@@ -19,12 +19,12 @@ PROJECT_ROOT = None
 ENV_FILE = None
 
 
-def project_root():
-    """The nearest folder from the current folder upwards that holds a ROOT_MARKERS
-    entry, else the current folder."""
+def project_root(start=None):
+    """The nearest folder from start (default: the current folder) upwards that holds a
+    ROOT_MARKERS entry, else start."""
     if PROJECT_ROOT is not None:
         return Path(PROJECT_ROOT)
-    start = Path.cwd()
+    start = Path(start).resolve() if start is not None else Path.cwd()
     for folder in [start, *start.parents]:
         if any((folder / marker).exists() for marker in ROOT_MARKERS):
             return folder

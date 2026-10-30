@@ -6,7 +6,7 @@ Run a program once with recording on, and every web service call it makes is sav
 with replay on, and the same program gets the saved answers: no network, no sign-in, no cost. It is made for scripts
 and SDK-based apps (AI agents, cloud SDKs) that run as normal commands, not only for unit tests.
 
-Status: early development (0.2.0), not on PyPI yet. What each version added: [CHANGELOG.md](CHANGELOG.md).
+Status: early development (0.3.0), not on PyPI yet. What each version added: [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
 
@@ -29,7 +29,7 @@ evaluation); all 27 replay with this package too (checked 2026-10-29).
 In your project, pinned to a tag (`[clock]` adds the recorded clock on replay, through time-machine):
 
 ```bash
-uv pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.2.0"
+uv pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.3.0"
 ```
 
 Once at the start of the program:
@@ -91,7 +91,8 @@ environment (pip, other tools).
 - **Recordings that describe themselves**: one JSON file per call (request and whole response); a
   `recording-info.txt` with the date, command, working folder, the command and settings that replay it, git commit,
   Python and package versions, the random seed, the start time and (with the runner) the exit code; and
-  `output.txt`, the run's console output.
+  `output.txt`, the run's console output. Paths under the home folder are written as `~/...`, so a recording shows
+  no user name.
 - **A regression suite for free**: `compare` and `replay-all` replay recordings against the current code and
   compare the output with the record runs' (see below).
 
@@ -155,7 +156,10 @@ python -m http_record_replay replay-all --all --strict         # every recording
 python -m http_record_replay compare runs/recordings/<folder> --real-sleep  # with real sleeps
 ```
 
-Each recording is replayed with the command, working folder and settings it was recorded with. A replay:
+Each recording is replayed with the command, working folder and settings it was recorded with. A recording made on
+another machine or in another clone replays too: a recorded Python that isn't there is replaced by the one running
+`compare`, and a recorded working folder that isn't there by the same folder relative to the recording's project
+root (one `[http_replay]` line says so). A replay:
 
 1. fails on a request the recording doesn't have (a MISS). Telemetry the SDKs send on their own (Azure Monitor
    uploads, for example) is counted apart: its misses are expected.
