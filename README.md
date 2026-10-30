@@ -6,7 +6,7 @@ Run a program once with recording on, and every web service call it makes is sav
 with replay on, and the same program gets the saved answers: no network, no sign-in, no cost. It is made for scripts
 and SDK-based apps (AI agents, cloud SDKs) that run as normal commands, not only for unit tests.
 
-Status: early development (0.2.0), not on PyPI yet.
+Status: early development (0.2.0), not on PyPI yet. What each version added: [CHANGELOG.md](CHANGELOG.md).
 
 ## Why
 
@@ -26,9 +26,10 @@ evaluation); all 27 replay with this package too (checked 2026-10-29).
 
 ## Quick start
 
+In your project, pinned to a tag (`[clock]` adds the recorded clock on replay, through time-machine):
+
 ```bash
-git clone https://github.com/khaledjamal/http-record-replay.git && cd http-record-replay
-uv venv && uv pip install -e ".[clock]"   # [clock]: the recorded clock on replay (time-machine)
+uv pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.2.0"
 ```
 
 Once at the start of the program:
@@ -229,7 +230,8 @@ http-record-replay to record and replay whole runs of Python scripts and SDK app
 ## Development
 
 ```bash
-uv pip install -e ".[test]"
+git clone https://github.com/khaledjamal/http-record-replay.git && cd http-record-replay
+uv venv && uv pip install -e ".[test]"
 python -m unittest discover -s tests -v
 ruff check . && ruff format --check .
 ```
