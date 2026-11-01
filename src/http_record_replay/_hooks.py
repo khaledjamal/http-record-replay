@@ -215,6 +215,8 @@ def _decode(data, encoding):
     if not data or not encoding:
         return data
     encoding = encoding.lower()
+    if encoding == "identity":  # means not compressed; some servers send it anyway
+        return data
     # decompressobj also handles a body cut at its capture limit; deflate is
     # zlib-wrapped or raw, depending on the server.
     window_bits = {"gzip": [16 + zlib.MAX_WBITS], "deflate": [zlib.MAX_WBITS, -zlib.MAX_WBITS]}.get(encoding, [])

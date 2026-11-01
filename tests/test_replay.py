@@ -91,6 +91,8 @@ class Handler(BaseHTTPRequestHandler):
         elif self.path.startswith("/gzip"):
             body = gzip.compress(json.dumps(REPLY).encode())
             self.send_body(body, "application/json", {"Content-Encoding": "gzip"})
+        elif self.path.startswith("/identity-sse"):
+            self.send_body(SSE_BODY.encode(), "text/event-stream", {"Content-Encoding": "identity"})
         elif self.path.startswith("/sse"):
             self.send_body(SSE_BODY.encode(), "text/event-stream")
         else:
@@ -265,6 +267,22 @@ class HttpxReplayTest(ReplayTestCase):
                 recorded = self.record_run(calls)
                 self.assertEqual(len(recorded[0]), 3)
                 self.assertEqual(self.replay_run(calls), (recorded[0], _redacted(recorded[1])))
+
+    def test_identity_encoding_keeps_the_body_in_the_recording(self):
+        # Content-Encoding: identity means not compressed. The MCP extension of Azure
+        # Functions sends it on its event streams.
+        for module in self.clients():
+            with self.subTest(module=module.__name__):
+                self.folder = self.new_folder()
+
+                def calls(module=module):
+                    with module.Client() as client, client.stream("GET", f"{self.base}/identity-sse") as response:
+                        return [line for line in response.iter_lines() if line]
+
+                recorded = self.record_run(calls)
+                self.assertEqual(len(recorded), 3)
+                self.assertNotIn("compressed body", self.recording_text())
+                self.assertEqual(self.replay_run(calls), recorded)
 
     def test_replayed_body_is_logged_when_read(self):
         # The log must see a replayed body as the caller reads it, as with a real one,

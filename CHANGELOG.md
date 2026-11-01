@@ -2,7 +2,15 @@
 
 Each version lists the settings and options it added and the behavior it changed, so a project pinned to an older
 version can tell what it has. Install a version by its tag:
-`pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.3.0"`.
+`pip install "http-record-replay[clock] @ git+https://github.com/khaledjamal/http-record-replay@v0.3.1"`.
+
+## 0.3.1 (2026-11-01)
+
+Fixed:
+- A response with `Content-Encoding: identity` (not compressed; the MCP extension of Azure Functions sends it) keeps
+  its body in the log and the recording. Before, both held `<identity-compressed body, ...>`, and the replay failed
+  with `TypeError: sequence item 0: expected a bytes-like object, str found`. Recordings made with 0.3.0 from such a
+  server have no body: record them again.
 
 ## 0.3.0 (2026-10-30)
 
